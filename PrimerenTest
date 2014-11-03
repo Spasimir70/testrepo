@@ -1,0 +1,130 @@
+-- Точка 1
+
+CREATE TABLE Seafoodsales (
+   ProductID int PRIMARY KEY,
+   ProductName nvarchar(40),
+   TotalQuantity int,
+   AvgPrice money
+   )
+GO
+
+
+-- Точка 2
+
+INSERT INTO Seafoodsales
+SELECT p.ProductID, p.ProductName, SUM(od.quantity) AS SumQuantity, AVG(od.UnitPrice) AS AvgUnitPrice 
+FROM Products p inner join [Order Details] od ON p.ProductID = od.ProductID
+WHERE p.CategoryID = 8
+GROUP BY p.ProductID, p.ProductName
+GO
+
+
+-- Точка 3
+
+ALTER TABLE Seafoodsales
+ADD Price money not null
+default 0
+GO
+
+
+-- Точка 4
+
+UPDATE Seafoodsales
+SET Price = i.UnitPrice
+FROM (SELECT p.ProductID, p.UnitPrice FROM Products p) i
+WHERE Seafoodsales.ProductID = i.ProductID
+GO
+
+
+-- Точка 5
+
+DELETE FROM Seafoodsales
+WHERE Price < 10
+GO
+
+
+-- Точка 6
+
+DROP TABLE Seafoodsales
+GO
+
+
+-- Точка 7
+
+CREATE VIEW ProductsView
+AS
+SELECT p.ProductID, p.ProductName, c.CategoryName, s.CompanyName, s.Country
+FROM Products p inner join Categories c ON p.CategoryID = c.CategoryID
+                inner join Suppliers s ON p.SupplierID = s.SupplierID
+GO
+
+
+-- Точка 8
+
+SELECT pv.ProductName, pv.CompanyName, pv.Country, SUM(od.Quantity) AS quantity
+FROM ProductsView pv inner join [Order Details] od ON pv.ProductID = od.ProductID
+WHERE Country in ('Spain', 'France', 'Italy')
+GROUP BY pv.ProductName, pv.CompanyName, pv.Country
+ORDER BY pv.ProductName
+GO
+
+
+-- Точка 9
+
+DROP VIEW ProductsView
+GO
+
+
+-- Точка 10
+
+CREATE FUNCTION dbo.Sum_Product_Sales(@ProductID int)
+RETURNS money
+AS
+BEGIN
+     DECLARE @money_sum money
+     SELECT @money_sum = SUM(CAST(UnitPrice*UnitsInStock AS money))
+     FROM Products p
+     WHERE ProductID = @ProductID
+     
+     IF @money_sum is null
+     SET @money_sum = 0
+     RETURN @money_sum
+     
+END
+GO
+
+
+-- Точка 11
+
+SELECT dbo.Sum_Product_Sales(1) as UnitPrice
+SELECT p.ProductID, p.ProductName, p.UnitPrice, dbo.Sum_Product_Sales(p.ProductID) AS sales_sum
+FROM Products p
+WHERE (SELECT COUNT(*) FROM [Order Details] od WHERE od.ProductID = p.ProductID) > 50
+GO
+
+
+-- Точка 12
+
+CREATE FUNCTION dbo.Avg_Product_Qty(@likeParam nvarchar(20))
+RETURNS TABLE
+AS
+RETURN (SELECT p.ProductID, p.ProductName, sp.CompanyName, sp.Country, AVG(od.UnitPrice) AS AverageUnitPrice
+FROM Products p inner join Suppliers sp ON p.SupplierID = sp.SupplierID
+                inner join [Order Details] od ON p.ProductID = od.ProductID
+GROUP BY p.ProductID, p.ProductName, sp.CompanyName, sp.Country
+HAVING sp.Country like @likeParam)
+GO
+
+
+-- Точка 13
+
+SELECT * FROM dbo.Avg_Product_Qty('USA')
+SELECT * FROM dbo.Avg_Product_Qty('%')
+GO
+
+
+-- Точка 14
+
+DROP FUNCTION dbo.Sum_Product_Sales
+DROP FUNCTION dbo.Avg_Product_Qty
+GO
